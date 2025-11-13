@@ -49,8 +49,9 @@ class database:
         table_name = self.config['files']['table']
         column_mappings = {col['excel_column']: col['name'] for col in self.config['tables'][table_name]['columns'] if 'excel_column' in col}
         df = df[list(column_mappings.keys())]
+        df = df.dropna(subset=self.config['tables']['gym_sessions']['columns'][1]['excel_column'])
         df.rename(columns=column_mappings, inplace=True)
-        df.to_sql(table_name, self.conn, if_exists='append', index=False)
+        df.to_sql(table_name, self.conn, if_exists='replace', index=False)
 
 if __name__ == "__main__":
     db = database()
