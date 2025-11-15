@@ -9,8 +9,13 @@ from db.db import database
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-db = database()
 
+db = database()
+# State
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user" not in st.session_state:
+    st.session_state.user = None
 
 st.set_page_config(
     layout="centered", page_title="Gym tings", page_icon="🏋️"
@@ -23,9 +28,21 @@ if not "valid_inputs_received" in st.session_state:
 
 # --- Sidebar navigation ---
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Gym Tracker", "Stats 1", "Stats 2", "Stats 3", "About"])
+page = st.sidebar.radio("Go to", ["Login","Registration","Gym Tracker", "Stats 1", "Stats 2", "Stats 3", "About"])
 
 # --- Page content ---
+if page == "Login" and not st.session_state.logged_in:
+    st.title("🔐 Login Page")
+    st.write("This is the login page. Please enter your credentials to log in.")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    login_btn = st.button("Login")
+
+elif page == "Registration" and not st.session_state.logged_in:
+    st.title("📝 Registration Page")
+    st.write("This is the registration page. Please fill in the form to create an account.")
+
 if page == "Gym Tracker":
     st.title("Home Gym Tracker")
     df = pd.read_sql_query("""
@@ -71,6 +88,16 @@ elif page == "Stats 1":
 
 elif page == "Stats 2":
     st.title("Stats 2")
+    week_grouped_by_df = pd.read_sql_query("""
+                      SELECT strftime('%W-%Y', date) AS Year_Week,
+                          COUNT(*) AS Session_Count
+                        FROM gym_sessions GROUP BY Year_Week""", db.conn)
+    st.dataframe(week_grouped_by_df)
+
+    week_count_grouped_df = week_grouped_by_df.groupby('Session_Count').size().reset_index(name='Number_of_Weeks')
+    st.dataframe(week_count_grouped_df)
+
+    st.bar_chart(week_count_grouped_df.set_index('Session_Count'))
 
 elif page == "Stats 3":
     st.title("Stats 3")
