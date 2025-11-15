@@ -2,6 +2,7 @@ import sqlite3
 import yaml
 from pathlib import Path
 import pandas as pd
+import hashlib
 
 class database:
     def __init__(self):
@@ -52,6 +53,22 @@ class database:
         df = df.dropna(subset=self.config['tables']['gym_sessions']['columns'][1]['excel_column'])
         df.rename(columns=column_mappings, inplace=True)
         df.to_sql(table_name, self.conn, if_exists='replace', index=False)
+
+    def hash_password(self, password):
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def register_user(self, username, email, password):
+        hashed_password = self.hash_password(password)
+        insert_sql = "INSERT INTO users (username, email, password) VALUES (?, ?, ?);"
+        self.cursor.execute(insert_sql, (username, email, hashed_password))
+        self.conn.commit()
+
+    def check_user_credentials(self, username, password):
+        hashed_password = self.hash_password(password)
+        select_sql = "SELECT * FROM users WHERE username = ? AND password = ?;"
+        self.cursor.execute(select_sql, (username, hashed_password))
+        user = self.cursor.fetchone()
+        return user is not None
 
 if __name__ == "__main__":
     db = database()
