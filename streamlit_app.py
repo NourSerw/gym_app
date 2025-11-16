@@ -1,3 +1,4 @@
+import datetime
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -10,9 +11,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Initialize database
 db = database()
-db.create_tables()
-db.from_csv_to_db()
+
+def to_seconds(t):
+    if not t:                
+        return None
+    try:
+        h, m, s = t.split(':')
+        return int(h)*3600 + int(m)*60 + float(s)
+    except Exception:
+        return None
+
+def from_seconds(sec):
+    return str(datetime.timedelta(seconds=sec))
+
 # State
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -36,7 +49,7 @@ if not "valid_inputs_received" in st.session_state:
 st.sidebar.title("Menu")
 if st.session_state.logged_in:
     st.sidebar.write(f"Logged in as: {st.session_state.user}")
-    page = st.sidebar.radio("Go to", ["Gym Tracker", "Stats 1", "Stats 2", "Stats 3", "About", "Logout"])
+    page = st.sidebar.radio("Go to", ["Gym Tracker", "Change Data","Stats 1", "Stats 2", "Stats 3", "About", "Logout"])
 else:
     page = st.sidebar.radio("Go to", ["Login", "About"])
 
@@ -65,6 +78,27 @@ if page == "Gym Tracker":
                            gym_name as Gym, category as Category 
                            FROM gym_sessions""", db.conn)
     st.dataframe(df)
+elif page == "Change Data":
+    st.title("Insert Record(s)")
+    with st.form("insert_form"):
+        date = st.text_input("Date (YYYY-MM-DD)")
+        duration = st.text_input("Duration (HH:MM:SS)")
+        gym_name = st.text_input("Gym Name")
+        category = st.text_input("Category")
+        submitted = st.form_submit_button("Insert Record")
+    
+        if submitted:
+            if duration and gym_name and category:
+                insert_status = db.insert_gym_session(date, duration, gym_name, category)
+                if insert_status:
+                    st.success("Record inserted successfully!")
+                else:
+                    st.error("Failed to insert record. Please check your input.")
+            else:
+                st.error("Please fill in all fields.")
+
+    st.title("Delete Record(s)")
+
 elif page == "Stats 1":
     st.title("Stats 1")
     col1, col2, col3 = st.columns(3)
@@ -96,7 +130,12 @@ elif page == "Stats 1":
         st.dataframe(max_vists_month_df)
 
         average_time_gym_df = pd.read_sql_query("""
-                                SELECT AVG(duration) AS Average_Duration FROM gym_sessions""", db.conn)
+                                SELECT duration FROM gym_sessions WHERE duration IS NOT NULL""", db.conn)
+        average_time_gym_df['Duration_Seconds'] = average_time_gym_df['duration'].apply(to_seconds)
+        average_seconds = average_time_gym_df['Duration_Seconds'].mean()
+        average_time_gym_df = pd.DataFrame({
+            'Average_Duration': [from_seconds(average_seconds)]
+        })  
 
         st.write("Average time spent in the gym per session:")
         st.dataframe(average_time_gym_df)
@@ -126,6 +165,13 @@ elif page == "Stats 2":
 
 elif page == "Stats 3":
     st.title("Stats 3")
+    days_stats_df = pd.read_sql_query("""
+                                      SELECT julianday(date()) - julianday(min(date)) AS Total_Days,
+                                      julianday(max(date)) - julianday(min(date)) AS Logged_Days,
+                                      ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0) AS Total_Weeks
+                                      FROM gym_sessions
+                                      """, db.conn)
+    st.dataframe(days_stats_df)
 
 elif page == "About":
     st.title("About")
