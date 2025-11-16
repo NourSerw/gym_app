@@ -10,7 +10,7 @@ tables:
         type: text
       - name: duration
         excel_column: "Minutes in Gym"
-        type: integer
+        type: text
       - name: gym_name
         excel_column: "Location"
         type: text

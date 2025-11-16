@@ -11,39 +11,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 db = database()
+db.create_tables()
+db.from_csv_to_db()
 # State
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user" not in st.session_state:
     st.session_state.user = None
 
-st.markdown("""
-<style>
-.top-right-menu {
-    position: absolute;
-    top: 12px;
-    right: 20px;
-    z-index: 999999;
-}
-</style>
-""", unsafe_allow_html=True)
-
-menu = st.container()
-with menu:
-    st.markdown('<div class="right-menu">', unsafe_allow_html=True)
-
-    col1, col2 = st.columns([1,1])
-    with col1:
-        if st.button("Login"):
-            st.session_state["page"] = "login"
-    with col2:
-        if st.button("Register"):
-            st.session_state["page"] = "register"
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
+# Set page title and icon (favicon)
 st.set_page_config(
-    layout="centered", page_title="Gym tings", page_icon="🏋️"
+    page_title="Gym Tings",
+    page_icon="🏋️",  
+    layout="wide",  
+    initial_sidebar_state="expanded"  
 )
 
 st.title("Welcome to Gym Tings! 🏋️‍♂️")
@@ -52,8 +33,12 @@ if not "valid_inputs_received" in st.session_state:
     st.session_state["valid_inputs_received"] = False
 
 # --- Sidebar navigation ---
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Login","Registration","Gym Tracker", "Stats 1", "Stats 2", "Stats 3", "About"])
+st.sidebar.title("Menu")
+if st.session_state.logged_in:
+    st.sidebar.write(f"Logged in as: {st.session_state.user}")
+    page = st.sidebar.radio("Go to", ["Gym Tracker", "Stats 1", "Stats 2", "Stats 3", "About", "Logout"])
+else:
+    page = st.sidebar.radio("Go to", ["Login", "About"])
 
 # --- Page content ---
 if page == "Login" and not st.session_state.logged_in:
@@ -62,28 +47,16 @@ if page == "Login" and not st.session_state.logged_in:
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
-    login_btn = st.button("Login First")
+    login_btn = st.button("Login")
 
     if login_btn:
         if db.check_user_credentials(username, password):
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success("Login successful!")
+            st.rerun()
         else:
             st.error("Invalid username or password.")
-
-elif page == "Registration" and not st.session_state.logged_in:
-    st.title("📝 Registration Page")
-    st.write("This is the registration page. Please fill in the form to create an account.")
-
-    new_username = st.text_input("Choose a Username")
-    new_email = st.text_input("Email Address")
-    new_password = st.text_input("Choose a Password", type="password")
-    register_btn = st.button("Register")
-
-    if register_btn:
-        db.register_user(new_username, new_email, new_password)
-        st.success("Registration successful! You can now log in.")
 
 if page == "Gym Tracker":
     st.title("Home Gym Tracker")
@@ -118,6 +91,16 @@ elif page == "Stats 1":
         st.dataframe(month_grouped_by)
         st.line_chart(month_grouped_by.set_index('Year_Month'))
 
+        max_vists_month_df = month_grouped_by[month_grouped_by['Session_Count'] == month_grouped_by['Session_Count'].max()]
+        st.write("Months with the highest number of visits:")
+        st.dataframe(max_vists_month_df)
+
+        average_time_gym_df = pd.read_sql_query("""
+                                SELECT AVG(duration) AS Average_Duration FROM gym_sessions""", db.conn)
+
+        st.write("Average time spent in the gym per session:")
+        st.dataframe(average_time_gym_df)
+
     with col3:
         locaton_grouped_df = pd.read_sql_query("""
                             SELECT gym_name AS Gym, COUNT(*) AS Session_Count
@@ -146,3 +129,10 @@ elif page == "Stats 3":
 
 elif page == "About":
     st.title("About")
+    st.write("Something I do because I simply want to. Hurrah!")
+
+elif page == "Logout" and st.session_state.logged_in:
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.success("You have been logged out.")
+    st.rerun()

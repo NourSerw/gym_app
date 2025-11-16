@@ -6,26 +6,27 @@ import hashlib
 
 class database:
     def __init__(self):
+        """Initialize the database by creating a connection, cursor, and loading the configuration."""
         cursor, conn = self.create_db()
         self.cursor = cursor
         self.conn = conn
         self.config = self.get_config()
-        self.create_tables()
-        self.from_csv_to_db()
 
     def get_config(self):
+        """Load the database configuration from a YAML file."""
         config_path = Path(__file__).parent.parent / "configs" / "db.yml"
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config
 
     def create_db(self):
+        """Create a SQLite database connection and return the cursor and connection."""
         conn = sqlite3.connect("db/gym_data.db")
         cursor = conn.cursor()
         return cursor, conn
     
     def create_tables(self):
-        
+        """Create tables based on the configuration."""
         for table_name, table_info in self.config['tables'].items():
             columns_sql = []
             for col in table_info['columns']:
@@ -56,12 +57,6 @@ class database:
 
     def hash_password(self, password):
         return hashlib.sha256(password.encode()).hexdigest()
-    
-    def register_user(self, username, email, password):
-        hashed_password = self.hash_password(password)
-        insert_sql = "INSERT INTO users (username, email, password) VALUES (?, ?, ?);"
-        self.cursor.execute(insert_sql, (username, email, hashed_password))
-        self.conn.commit()
 
     def check_user_credentials(self, username, password):
         hashed_password = self.hash_password(password)
