@@ -153,9 +153,9 @@ elif page == "Stats 1":
 elif page == "Stats 2":
     st.title("Stats 2")
     week_grouped_by_df = pd.read_sql_query("""
-                      SELECT strftime('%W-%Y', date) AS Year_Week,
+                      SELECT strftime('%W-%Y', date) AS Week_Year,
                           COUNT(*) AS Session_Count
-                        FROM gym_sessions GROUP BY Year_Week""", db.conn)
+                        FROM gym_sessions GROUP BY Week_Year""", db.conn)
     st.dataframe(week_grouped_by_df)
 
     week_count_grouped_df = week_grouped_by_df.groupby('Session_Count').size().reset_index(name='Number_of_Weeks')
@@ -163,12 +163,20 @@ elif page == "Stats 2":
 
     st.bar_chart(week_count_grouped_df.set_index('Session_Count'))
 
+    week_count_median_df = week_grouped_by_df.groupby('Session_Count').count()
+    week_count_median_df = week_count_median_df.rename(columns={'Week_Year': 'Number of Weeks'})
+    week_count_median_df = week_count_median_df.reset_index()
+    st.dataframe(week_count_median_df)
+
 elif page == "Stats 3":
     st.title("Stats 3")
     days_stats_df = pd.read_sql_query("""
                                       SELECT julianday(date()) - julianday(min(date)) AS Total_Days,
                                       julianday(max(date)) - julianday(min(date)) AS Logged_Days,
-                                      ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0) AS Total_Weeks
+                                      ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0) AS Total_Weeks,
+                                      (strftime('%Y', max(date)) - strftime('%Y', min(date))) * 12 +  
+                                      (strftime('%m', max(date)) - strftime('%m', min(date))) AS Total_Months,
+                                      strftime('%Y', max(date)) - strftime('%Y', min(date)) AS Total_Years
                                       FROM gym_sessions
                                       """, db.conn)
     st.dataframe(days_stats_df)
