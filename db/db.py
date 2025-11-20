@@ -10,14 +10,19 @@ class database:
         cursor, conn = self.create_db()
         self.cursor = cursor
         self.conn = conn
-        self.config = self.get_config()
+        self.config_path = Path(__file__).parent.parent / "configs" / "db.yml"
+        self.config = self.get_config(self.config_path)
 
-    def get_config(self):
+    def get_config(self, config_path):
         """Load the database configuration from a YAML file."""
-        config_path = Path(__file__).parent.parent / "configs" / "db.yml"
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config
+    
+    def write_config(self, config, config_path):
+        """Write the current configuration back to the YAML file."""
+        with open(config_path, "w") as f:
+            yaml.safe_dump(config, f, default_flow_style=False)
 
     def create_db(self):
         """Create a SQLite database connection and return the cursor and connection."""
@@ -93,43 +98,16 @@ class database:
     def insert_gym_session(self, date, duration, gym_name, category):
         try:
             insert_sql = """
-            INSERT INTO gym_sessions (id, date, duration, gym_name, category)
-            VALUES (?, ?, ?, ?, ?);
+            INSERT INTO gym_sessions (date, duration, gym_name, category)
+            VALUES (?, ?, ?, ?);
             """
             self.cursor.execute(insert_sql, (date, duration, gym_name, category))
             self.conn.commit()
-            self.drop_duplicates(self.config['files']['table'][0], ['date', 'duration', 'gym_name', 'category'])
+            self.drop_duplicates(self.config['files']['table'], ['date', 'duration', 'gym_name', 'category'])
             return True
         except sqlite3.IntegrityError as e:
             print(f"Error inserting gym session: {e}")
             return False
-        
-    def upsert_gym_session(self):
-        """Upsert the gym data because I can't be bothered to check if it exists first."""
-        df = pd.read_excel(self.config['files']['path'])
-        df['Day'] = df['Day'].astype(str)
-        df['Minutes in Gym'] = df['Minutes in Gym'].astype(str)
-        table_name = self.config['files']['table']
-        column_mappings = {col['excel_column']: col['name'] for col in self.config['tables'][table_name]['columns'] if 'excel_column' in col}
-        df = df[list(column_mappings.keys())]
-        df = df.dropna(subset=self.config['tables']['gym_sessions']['columns'][3]['excel_column'])
-        df.rename(columns=column_mappings, inplace=True)
-        # Build insert columns and placeholders from the DataFrame (columns are already DB names)
-        insert_cols = df.columns.tolist()
-        placeholders = ", ".join(["?" for _ in insert_cols])
-
-        # Determine PK columns defined in the config for ON CONFLICT clause
-        pk_cols = [c['name'] for c in self.config['tables'][table_name]['columns'] if c.get('primary_key')]
-
-        insert_sql = f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES ({placeholders})"
-        if pk_cols:
-            insert_sql += f" ON CONFLICT({', '.join(pk_cols)}) DO NOTHING"
-        insert_sql += ";"
-
-        # executemany expects an iterable of tuples; to_records gives numpy records so convert to list of tuples
-        values = [tuple(r) for r in df.to_numpy()]
-        self.conn.executemany(insert_sql, values)
-        self.conn.commit()
 
     def drop_duplicates(self, table_name, subset_columns):
         cols = ', '.join(subset_columns)
@@ -145,5 +123,13 @@ class database:
         self.conn.commit()
 
 db = database()
-db.create_tables()
-db.from_csv_to_db()
+if db.config['database']['tables_created'] == False:
+    db.create_tables()
+    db.config['database']['tables_created'] = True
+    db.write_config(db.config, db.config_path)
+if db.config['database']['csv_loaded'] == False:
+    db.from_csv_to_db()
+    db.config['database']['csv_loaded'] = True
+    db.write_config(db.config, db.config_path)
+else:
+    print("CSV data already loaded into the database.")

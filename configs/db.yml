@@ -1,38 +1,42 @@
+database:
+  csv_loaded: true
+  name: gym_tracker
+  path: db/gym_tracker.db
+  tables_created: true
+files:
+  path: db/Gym Sheets.xlsx
+  sheet: Gym Tracker
+  table: gym_sessions
 tables:
   gym_sessions:
     columns:
-      - name: id
-        type: integer
-        primary_key: true
-        autoincrement: true
-      - name: date
-        excel_column: Day
-        type: text
-      - name: duration
-        excel_column: "Minutes in Gym"
-        type: text
-      - name: gym_name
-        excel_column: "Location"
-        type: text
-      - name: category
-        excel_column: "Exercise Category"
-        type: text
+    - autoincrement: true
+      name: id
+      primary_key: true
+      type: integer
+    - excel_column: Day
+      name: date
+      type: text
+    - excel_column: Minutes in Gym
+      name: duration
+      type: text
+    - excel_column: Location
+      name: gym_name
+      type: text
+    - excel_column: Exercise Category
+      name: category
+      type: text
   users:
     columns:
-      - name: id
-        type: integer
-        primary_key: true
-        autoincrement: true
-      - name: username
-        type: text
-        not_null: true
-      - name: email
-        type: text
-      - name: password
-        type: text
-        not_null: true
-
-files:
-  path: "db/Gym Sheets.xlsx"
-  sheet: "Gym Tracker"
-  table: gym_sessions
+    - autoincrement: true
+      name: id
+      primary_key: true
+      type: integer
+    - name: username
+      not_null: true
+      type: text
+    - name: email
+      type: text
+    - name: password
+      not_null: true
+      type: text
