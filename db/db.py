@@ -10,19 +10,14 @@ class database:
         cursor, conn = self.create_db()
         self.cursor = cursor
         self.conn = conn
-        self.config_path = Path(__file__).parent.parent / "configs" / "db.yml"
-        self.config = self.get_config(self.config_path)
+        self.config = self.get_config()
 
-    def get_config(self, config_path):
+    def get_config(self):
         """Load the database configuration from a YAML file."""
+        config_path = Path(__file__).parent.parent / "configs" / "db.yml"
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config
-    
-    def write_config(self, config, config_path):
-        """Write the current configuration back to the YAML file."""
-        with open(config_path, "w") as f:
-            yaml.safe_dump(config, f, default_flow_style=False)
 
     def create_db(self):
         """Create a SQLite database connection and return the cursor and connection."""
@@ -98,12 +93,12 @@ class database:
     def insert_gym_session(self, date, duration, gym_name, category):
         try:
             insert_sql = """
-            INSERT INTO gym_sessions (date, duration, gym_name, category)
-            VALUES (?, ?, ?, ?);
+            INSERT INTO gym_sessions (id, date, duration, gym_name, category)
+            VALUES (?, ?, ?, ?, ?);
             """
             self.cursor.execute(insert_sql, (date, duration, gym_name, category))
             self.conn.commit()
-            self.drop_duplicates(self.config['files']['table'], self.config['tables']['gym_sessions']['columns'][1]['name'])
+            self.drop_duplicates(self.config['files']['table'][0], ['date', 'duration', 'gym_name', 'category'])
             return True
         except sqlite3.IntegrityError as e:
             print(f"Error inserting gym session: {e}")
@@ -137,12 +132,13 @@ class database:
         self.conn.commit()
 
     def drop_duplicates(self, table_name, subset_columns):
+        cols = ', '.join(subset_columns)
         delete_sql = f"""
         DELETE FROM {table_name}
         WHERE rowid NOT IN (
             SELECT MIN(rowid)
             FROM {table_name}
-            GROUP BY {subset_columns}
+            GROUP BY {cols}
         );
         """
         self.cursor.execute(delete_sql)
@@ -150,4 +146,4 @@ class database:
 
 db = database()
 db.create_tables()
-db.upsert_gym_session()
+db.from_csv_to_db()
