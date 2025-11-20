@@ -74,8 +74,8 @@ if page == "Login" and not st.session_state.logged_in:
 if page == "Gym Tracker":
     st.title("Home Gym Tracker")
     df = pd.read_sql_query("""
-                           SELECT date AS Date, duration AS Duration, 
-                           gym_name as Gym, category as Category 
+                           SELECT date AS Date, category AS Category, 
+                           gym_name AS Gym, duration AS Duration
                            FROM gym_sessions""", db.conn)
     st.dataframe(df)
 elif page == "Change Data":

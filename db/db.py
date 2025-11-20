@@ -33,23 +33,48 @@ class database:
     def create_tables(self):
         """Create tables based on the configuration."""
         for table_name, table_info in self.config['tables'].items():
-            columns_sql = []
-            for col in table_info['columns']:
-                col_def = f"{col['name']} {col['type']}"
-                if col.get('primary_key'):
-                    col_def += " PRIMARY KEY"
-                if col.get('autoincrement'):
-                    col_def += " AUTOINCREMENT"
-                if col.get('not_null'):
-                    col_def += " NOT NULL"
-                if col.get('unique'):
-                    col_def += " UNIQUE"
-                columns_sql.append(col_def)
-        
-            create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns_sql)});"
-            print(f"Creating table {table_name}: {create_sql}")
-            self.cursor.execute(create_sql)
-            self.conn.commit()
+                columns_sql = []
+                pk_cols = []
+                autoinc_col = None
+
+                # build basic column definitions, collect PKs and AUTOINC info
+                for col in table_info['columns']:
+                    col_name = col['name']
+                    col_def = f"{col_name} {col['type']}"
+                    if col.get('not_null'):
+                        col_def += " NOT NULL"
+                    if col.get('unique'):
+                        col_def += " UNIQUE"
+
+                    if col.get('primary_key'):
+                        pk_cols.append(col_name)
+                        if col.get('autoincrement'):
+                            autoinc_col = col_name
+
+                    columns_sql.append(col_def)
+
+                # Handle AUTOINCREMENT only when a single PK column requests it
+                if autoinc_col and len(pk_cols) == 1:
+                    # replace that column's definition to include PRIMARY KEY AUTOINCREMENT
+                    for i, col in enumerate(table_info['columns']):
+                        if col['name'] == autoinc_col:
+                            columns_sql[i] = f"{autoinc_col} {col['type']} PRIMARY KEY AUTOINCREMENT"
+                            break
+                    # remove from pk_cols so we don't also add a table-level PK for it
+                    pk_cols = [c for c in pk_cols if c != autoinc_col]
+                else:
+                    if autoinc_col and len(pk_cols) > 1:
+                        print(f"Warning: AUTOINCREMENT requested for '{autoinc_col}' but multiple primary keys defined for table '{table_name}'. AUTOINCREMENT will be ignored.")
+
+                # construct CREATE TABLE SQL; if multiple PKs, add table-level PRIMARY KEY
+                create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns_sql)}"
+                if pk_cols:
+                    create_sql += f", PRIMARY KEY ({', '.join(pk_cols)})"
+                create_sql += ");"
+
+                print(f"Creating table {table_name}: {create_sql}")
+                self.cursor.execute(create_sql)
+                self.conn.commit()
 
     def from_csv_to_db(self):
         df = pd.read_excel(self.config['files']['path'])
@@ -83,6 +108,33 @@ class database:
         except sqlite3.IntegrityError as e:
             print(f"Error inserting gym session: {e}")
             return False
+        
+    def upsert_gym_session(self):
+        """Upsert the gym data because I can't be bothered to check if it exists first."""
+        df = pd.read_excel(self.config['files']['path'])
+        df['Day'] = df['Day'].astype(str)
+        df['Minutes in Gym'] = df['Minutes in Gym'].astype(str)
+        table_name = self.config['files']['table']
+        column_mappings = {col['excel_column']: col['name'] for col in self.config['tables'][table_name]['columns'] if 'excel_column' in col}
+        df = df[list(column_mappings.keys())]
+        df = df.dropna(subset=self.config['tables']['gym_sessions']['columns'][3]['excel_column'])
+        df.rename(columns=column_mappings, inplace=True)
+        # Build insert columns and placeholders from the DataFrame (columns are already DB names)
+        insert_cols = df.columns.tolist()
+        placeholders = ", ".join(["?" for _ in insert_cols])
+
+        # Determine PK columns defined in the config for ON CONFLICT clause
+        pk_cols = [c['name'] for c in self.config['tables'][table_name]['columns'] if c.get('primary_key')]
+
+        insert_sql = f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES ({placeholders})"
+        if pk_cols:
+            insert_sql += f" ON CONFLICT({', '.join(pk_cols)}) DO NOTHING"
+        insert_sql += ";"
+
+        # executemany expects an iterable of tuples; to_records gives numpy records so convert to list of tuples
+        values = [tuple(r) for r in df.to_numpy()]
+        self.conn.executemany(insert_sql, values)
+        self.conn.commit()
 
     def drop_duplicates(self, table_name, subset_columns):
         delete_sql = f"""
@@ -97,13 +149,5 @@ class database:
         self.conn.commit()
 
 db = database()
-if db.config['database']['tables_created'] == False:
-    db.create_tables()
-    db.config['database']['tables_created'] = True
-    db.write_config(db.config, db.config_path)
-if db.config['database']['csv_loaded'] == False:
-    db.from_csv_to_db()
-    db.config['database']['csv_loaded'] = True
-    db.write_config(db.config, db.config_path)
-else:
-    print("CSV data already loaded into the database.")
+db.create_tables()
+db.upsert_gym_session()

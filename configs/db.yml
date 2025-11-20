@@ -1,8 +1,6 @@
 database:
-  csv_loaded: true
   name: gym_tracker
   path: db/gym_tracker.db
-  tables_created: true
 files:
   path: db/Gym Sheets.xlsx
   sheet: Gym Tracker
@@ -10,13 +8,10 @@ files:
 tables:
   gym_sessions:
     columns:
-    - autoincrement: true
-      name: id
-      primary_key: true
-      type: integer
     - excel_column: Day
       name: date
       type: text
+      primary_key: true
     - excel_column: Minutes in Gym
       name: duration
       type: text
@@ -34,8 +29,6 @@ tables:
       type: integer
     - name: username
       not_null: true
-      type: text
-    - name: email
       type: text
     - name: password
       not_null: true
