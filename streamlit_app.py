@@ -79,6 +79,9 @@ if page == "Gym Tracker":
                            FROM gym_sessions""", db.conn)
     st.dataframe(df)
 elif page == "Change Data":
+    """Page to change the data. Now includes insert and delete."""
+    gym_sessions = pd.read_sql_query("SELECT * FROM gym_sessions", db.conn)
+
     st.title("Insert Record(s)")
     with st.form("insert_form"):
         date = st.text_input("Date (YYYY-MM-DD)")
@@ -97,7 +100,17 @@ elif page == "Change Data":
             else:
                 st.error("Please fill in all fields.")
 
+    
     st.title("Delete Record(s)")
+    value = st.selectbox(
+        "Select date to delete",
+        sorted(gym_sessions['date'].dropna().unique()))
+    filtered_df = gym_sessions[gym_sessions['date'] == value]
+    st.subheader("Filtered Rows")
+    st.dataframe(filtered_df)
+    if st.button("Delete Dates"):
+        db.cursor("DELETE FROM gym_sessions WHERE date = ?", (filtered_df['date']))
+        db.conn.commit()
 
 elif page == "Stats 1":
     st.title("Stats 1")
@@ -153,9 +166,9 @@ elif page == "Stats 1":
 elif page == "Stats 2":
     st.title("Stats 2")
     week_grouped_by_df = pd.read_sql_query("""
-                      SELECT strftime('%W-%Y', date) AS Year_Week,
+                      SELECT strftime('%W-%Y', date) AS Week_Year,
                           COUNT(*) AS Session_Count
-                        FROM gym_sessions GROUP BY Year_Week""", db.conn)
+                        FROM gym_sessions GROUP BY Week_Year""", db.conn)
     st.dataframe(week_grouped_by_df)
 
     week_count_grouped_df = week_grouped_by_df.groupby('Session_Count').size().reset_index(name='Number_of_Weeks')
@@ -166,12 +179,22 @@ elif page == "Stats 2":
 elif page == "Stats 3":
     st.title("Stats 3")
     days_stats_df = pd.read_sql_query("""
-                                      SELECT julianday(date()) - julianday(min(date)) AS Total_Days,
-                                      julianday(max(date)) - julianday(min(date)) AS Logged_Days,
-                                      ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0) AS Total_Weeks
+                                      SELECT julianday(date()) - julianday(min(date)) AS 'Total Days',
+                                      julianday(max(date)) - julianday(min(date)) AS 'Logged Days',
+                                      ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0) AS 'Total Weeks',
+                                      ROUND((julianday(max(date)) - julianday(min(date))) / 30.0, 0) AS 'Total Months',
+                                      (COUNT(*) / ROUND((julianday(max(date)) - julianday(min(date))) / 7.0, 0)) AS 'Avg Sessions per Week',
+                                      (COUNT(*) / ROUND((julianday(max(date)) - julianday(min(date))) / 30.0, 0)) AS 'Avg Sessions per Month'
                                       FROM gym_sessions
                                       """, db.conn)
     st.dataframe(days_stats_df)
+
+    other_stats_df = pd.read_sql_query("""
+                                      SELECT ROUND((julianday(max(date)) - julianday(min(date))) / 365.0, 0) AS 'Total Years',
+                                      COUNT(*) / ROUND((julianday(max(date)) - julianday(min(date))) / 365.0, 0) AS 'Average Sessions per Year'
+                                      FROM gym_sessions
+                                      """, db.conn)
+    st.dataframe(other_stats_df)
 
 elif page == "About":
     st.title("About")
